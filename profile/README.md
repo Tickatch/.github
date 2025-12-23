@@ -1,4 +1,5 @@
 # 🎫 Tickatch
+<img width="693" height="349" alt="image" src="https://github.com/user-attachments/assets/1356b265-f1cd-48b0-ba04-6773eff51da3" />
 
 **Ticket + Catch**
 
