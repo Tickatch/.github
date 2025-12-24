@@ -556,7 +556,34 @@ INIT/PENDING_PAYMENT (10분 초과) → EXPIRED
 
 #### Reservation Seat Service
 
-<!-- TODO: 추후 작성 예정 -->
+| 항목 | 내용 |
+|------|------|
+| **목적** | 예매 좌석 관리 전용 마이크로서비스 |
+| **책임** | 상품 좌석 생성/수정, 좌석 예약 상태 관리 |
+
+**설계 핵심:**
+| 특징 | 설명 |
+|------|------|
+| **동시성 제어** | Pessimistic Lock으로 트랜잭션 레벨 잠금 |
+| **상태 패턴** | AVAILABLE → PREEMPT → RESERVED 생명주기 관리 |
+| **계층 구조** | Presentation → Application → Domain → Infrastructure |
+
+**좌석 상태 관리:**
+| 상태 | 설명 | 전환 조건 |
+|------|------|----------|
+| **AVAILABLE** | 예매 가능 | 초기 상태 또는 취소 후 |
+| **PREEMPT** | 선점됨 | AVAILABLE 상태에서만 가능 |
+| **RESERVED** | 예약됨 | PREEMPT 상태에서만 가능 |
+
+**이벤트 기반 연동:**
+- `ReservationSeatPreemptEvent` → 다른 서비스로 선점 알림
+- `ReservationSeatCanceledEvent` → 다른 서비스로 취소 알림
+- `ProductReservationSeatDeleteRequest` ← Product Service로부터 삭제 요청 수신
+
+**비즈니스 규칙:**
+- 상태 전환 시 요청자 권한 검증 필수
+- 선점/예약/취소 시 `findByIdWithLock`으로 락 획득
+- 상품 삭제 시 해당 상품의 모든 좌석 자동 삭제
 
 ---
 
@@ -679,13 +706,96 @@ SUCCESS → REFUND (예매 취소 시)
 
 #### Notification Service
 
-<!-- TODO: 추후 작성 예정 -->
+| 항목 | 내용 |
+|------|------|
+| **목적** | 알림 생성 및 발송 조율 마이크로서비스 |
+| **책임** | 알림 생성, 템플릿 렌더링, 채널별 발송 조율, 발송 결과 추적 |
+
+**설계 핵심:**
+| 특징 | 설명 |
+|------|------|
+| **통합 관리** | 모든 알림을 Notification 엔티티로 통합 관리 |
+| **전략 패턴** | 티켓 배송 방법(이메일/MMS)에 따라 전략 선택 |
+| **라우터 패턴** | 채널별 Publisher를 동적으로 라우팅 |
+
+**알림 상태 관리:**
+| 상태 | 설명 |
+|------|------|
+| **PENDING** | 알림 생성됨 (발송 대기) |
+| **PROCESSING** | 발송 처리 중 |
+| **SENT** | 발송 완료 |
+| **FAILED** | 발송 실패 |
+
+**지원 채널:**
+| 채널 | 설명 | 사용 시나리오 |
+|------|------|--------------|
+| **EMAIL** | 이메일 | 예매 완료, 티켓 발행 |
+| **SMS** | 단문 문자 | 간단한 알림 |
+| **MMS** | 멀티미디어 문자 | 티켓 발행 (QR 코드 포함) |
+| **SLACK** | Slack 메시지 | 관리자 알림 |
+
+**이벤트 기반 연동:**
+| 방향 | 이벤트 |
+|------|--------|
+| **수신** | `ReservationCompletedEvent`, `TicketIssuedEvent` |
+| **발행 → NotificationSender** | `EmailSendRequestEvent`, `SlackChannelMessageSendRequestEvent`, `MmsSendRequestEvent` |
+| **수신 ← NotificationSender** | `NotificationResultEvent` (발송 결과) |
+
+**비즈니스 규칙:**
+- 템플릿 기반 동적 콘텐츠 생성 (Thymeleaf)
+- QR 코드 생성 및 Base64 인코딩 (ZXing)
+- 실패 시 최대 3회 자동 재시도
+- 티켓 검증 URL: `https://www.tickatch.xyz/ticket/checked?ticketId={id}`
 
 ---
 
 #### Notification Sender Service
 
-<!-- TODO: 추후 작성 예정 -->
+| 항목 | 내용 |
+|------|------|
+| **목적** | 실제 알림 발송 처리 마이크로서비스 |
+| **책임** | 이메일/SMS/MMS/Slack 발송, 발송 이력 추적, 외부 API 통합 |
+
+**설계 핵심:**
+| 특징 | 설명 |
+|------|------|
+| **멀티 채널** | Email(SMTP) / Slack(Feign) / SMS·MMS(SOLAPI) 독립 처리 |
+| **재시도 메커니즘** | Spring Retry로 지수 백오프 재시도 |
+| **히스토리 추적** | 채널별 발송 이력 DB 영구 보관 |
+
+**발송 채널 구현:**
+| 채널 | 기술 | 특징 |
+|------|------|------|
+| **이메일** | Spring Mail (SMTP) | HTML 지원, UTF-8 인코딩 |
+| **Slack** | Spring Cloud OpenFeign | DM 자동 채널 생성, API 응답 검증 |
+| **SMS** | SOLAPI SDK | 단문 문자 발송 |
+| **MMS** | SOLAPI SDK | 이미지 첨부 (Base64) |
+
+**재시도 정책:**
+| 채널 | 재시도 간격 | 최대 횟수 |
+|------|------------|-----------|
+| **이메일** | 30초 → 60초 (2배수) | 3회 |
+| **Slack** | 5초 → 10초 (2배수) | 3회 |
+| **SMS** | 10초 (1.5배수) | 4회 |
+| **MMS** | 10초 (1.5배수) | 2회 |
+
+**발송 상태:**
+| 상태 | 설명 |
+|------|------|
+| **PENDING** | 발송 대기 중 |
+| **SUCCESS** | 발송 성공 |
+| **FAILED** | 발송 실패 |
+
+**이벤트 처리:**
+| 방향 | 이벤트 |
+|------|--------|
+| **수신 ← Notification** | `EmailSendRequestEvent`, `SlackChannelMessageSendRequestEvent`, `SmsSendRequestEvent`, `MmsSendRequestEvent` |
+| **발행 → Notification** | `NotificationResultEvent` (발송 결과 피드백) |
+
+**비즈니스 규칙:**
+- 각 발송 시도마다 히스토리 엔티티 생성 (PENDING 상태)
+- 발송 성공 시 `markAsSuccess()` 호출 → SUCCESS + sentAt 기록
+- 발송 실패 시 `markAsFailed(errorMessage)` 호출 → FAILED + 에러 저장
 
 ---
 
