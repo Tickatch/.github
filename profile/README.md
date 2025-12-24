@@ -452,16 +452,11 @@ DRAFT → PENDING → APPROVED → SCHEDULED → ON_SALE → CLOSED → COMPLETE
 
 **ArtHall / Stage**
 
-ACTIVE → INACTIVE
-↓
-(soft delete)
+ACTIVE → INACTIVE → (soft delete)
 
 **StageSeat**
 
-ACTIVE → INACTIVE
-↓
-(soft delete)
-
+ACTIVE → INACTIVE → (soft delete)
 
 ### 도메인 모델
 
