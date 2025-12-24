@@ -435,7 +435,6 @@ DRAFT → PENDING → APPROVED → SCHEDULED → ON_SALE → CLOSED → COMPLETE
 - 상위 도메인 삭제 시 하위 도메인 연쇄 삭제 처리
 - 아트홀/스테이지/좌석 상태 변경 이력 로그 발행
 
----
 
 ### 설계 핵심
 
@@ -448,7 +447,6 @@ DRAFT → PENDING → APPROVED → SCHEDULED → ON_SALE → CLOSED → COMPLETE
 | CQRS 분리 | Command / Query 분리 |
 | 로그 중심 | 주요 상태 변경·삭제 행위 Log Service로 전파 |
 
----
 
 ### 도메인 상태 흐름
 
@@ -464,7 +462,6 @@ ACTIVE → INACTIVE
 ↓
 (soft delete)
 
----
 
 ### 도메인 모델
 
@@ -474,7 +471,6 @@ ACTIVE → INACTIVE
 | Stage | 아트홀 내 개별 스테이지 관리 |
 | StageSeat | 좌석 위치·상태·배치 정보 관리 |
 
----
 
 ### 이벤트 연동
 
@@ -483,7 +479,6 @@ ACTIVE → INACTIVE
 | 발행 | 아트홀/스테이지/좌석 상태 변경 → Log Service |
 | 발행 | 연쇄 삭제(CASCADE_DELETED) → Log Service |
 
----
 
 ### 외부 서비스 연동
 
@@ -491,7 +486,6 @@ ACTIVE → INACTIVE
 |---|---|
 | Log Service | 도메인 행위 이력 기록 |
 
----
 
 ### 동시성·정합성
 
